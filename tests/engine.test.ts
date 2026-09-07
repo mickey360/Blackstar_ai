@@ -1,0 +1,2 @@
+import {describe,it,expect} from 'vitest';import {validateWorkflow} from '@/lib/validate';import {templates} from '@/lib/templates';
+describe('Blackstar workflow engine',()=>{it('validates templates',()=>{for(const t of templates)expect(validateWorkflow(t).valid).toBe(true)});it('rejects broken edges',()=>{const t={...templates[0],edges:[{id:'x',source:'missing',target:'t'}]};expect(validateWorkflow(t).valid).toBe(false)})});
