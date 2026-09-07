@@ -1,0 +1,2 @@
+export function resolvePath(input:any,path:string){return String(path||'').split('.').filter(Boolean).reduce((v,k)=>v?.[k],input)}
+export function compare(a:any,operator:string,b:any){switch(operator){case 'equals':return a==b;case 'not_equals':return a!=b;case 'contains':return String(a??'').includes(String(b??''));case 'gt':return Number(a)>Number(b);case 'gte':return Number(a)>=Number(b);case 'lt':return Number(a)<Number(b);case 'lte':return Number(a)<=Number(b);default:return Boolean(a)}}

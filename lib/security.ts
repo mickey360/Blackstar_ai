@@ -1,0 +1,1 @@
+const BLOCKED=['__proto__','constructor','prototype','require(','process.','child_process','eval('];export function isSafeText(text:string){const s=text.toLowerCase();return !BLOCKED.some(x=>s.includes(x))}
