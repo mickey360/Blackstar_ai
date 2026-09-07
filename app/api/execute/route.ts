@@ -1,0 +1,2 @@
+import {executeWorkflow} from '@/lib/engine';import {validateWorkflow} from '@/lib/validate';export const maxDuration=60;
+export async function POST(req:Request){try{const {workflow,input}=await req.json();const v=validateWorkflow(workflow);if(!v.valid)return Response.json({ok:false,error:v.errors.join(' ')},{status:400});return Response.json(await executeWorkflow(workflow,input));}catch(e:any){return Response.json({ok:false,error:e?.message||'Invalid request'},{status:400})}}
