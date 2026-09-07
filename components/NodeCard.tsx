@@ -10,7 +10,7 @@ interface NodeCardProps {
 }
 
 export function NodeCard({ node, selected = false }: NodeCardProps) {
-  const kind = node.data.config?.kind ?? node.type;
+  const kind = node.type;
   const meta = NODE_META[kind];
 
   return (
