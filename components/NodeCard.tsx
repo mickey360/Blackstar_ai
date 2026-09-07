@@ -1,13 +1,8 @@
 'use client';
 
 import { Handle, Position } from '@xyflow/react';
-
 import { NODE_META } from '@/lib/nodes';
-
-import type {
-  NodeKind,
-  WorkflowNode,
-} from '@/types/workflow';
+import type { NodeKind, WorkflowNode } from '@/types/workflow';
 
 export function NodeCard({
   node,
@@ -16,11 +11,14 @@ export function NodeCard({
   node: WorkflowNode;
   selected?: boolean;
 }) {
-  const kind = (
-    node.data.kind || node.type || 'transform'
-  ) as NodeKind;
+  // WorkflowNode.data doesn't currently declare `kind`,
+  // but the studio stores the node kind inside data.kind.
+  const nodeData = node.data as WorkflowNode['data'] & {
+    kind?: NodeKind;
+  };
 
-  const m = NODE_META[kind];
+  const kind = (nodeData.kind ?? node.type ?? 'transform') as NodeKind;
+  const meta = NODE_META[kind];
 
   return (
     <div
@@ -37,9 +35,7 @@ export function NodeCard({
       />
 
       <div className="px-3 py-2.5 border-b border-[var(--border)] flex items-center gap-2">
-        <span className="text-sm">
-          {m.icon}
-        </span>
+        <span className="text-sm">{meta.icon}</span>
 
         <div className="min-w-0">
           <div className="text-xs font-semibold truncate">
@@ -47,13 +43,13 @@ export function NodeCard({
           </div>
 
           <div className="text-[10px] text-[var(--muted)]">
-            {m.title}
+            {meta.title}
           </div>
         </div>
       </div>
 
       <div className="px-3 py-2 text-[10px] text-[var(--muted)] leading-relaxed">
-        {m.description}
+        {meta.description}
       </div>
 
       <Handle
