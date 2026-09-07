@@ -1,0 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root{--bg:#fff;--panel:#fafafa;--panel2:#f4f4f5;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--accent:#111827;--grid:rgba(0,0,0,.06)}
+.dark{--bg:#09090b;--panel:#0f0f12;--panel2:#18181b;--border:#27272a;--text:#fafafa;--muted:#a1a1aa;--accent:#fff;--grid:rgba(255,255,255,.055)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Geist,Arial,sans-serif;background:var(--bg);color:var(--text)}button,input,textarea,select{font:inherit}.mono{font-family:'Geist Mono',monospace}.canvas-grid{background-color:var(--bg);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:20px 20px}
+.react-flow__background{background:transparent}.react-flow__controls{border:1px solid var(--border);box-shadow:none}.react-flow__controls-button{background:var(--panel);border-color:var(--border);color:var(--text)}.react-flow__minimap{background:var(--panel);border:1px solid var(--border)}
+*{scrollbar-width:thin;scrollbar-color:#a1a1aa transparent}
