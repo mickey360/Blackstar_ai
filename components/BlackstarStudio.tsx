@@ -1,119 +1,39 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  addEdge,
-  useEdgesState,
-  useNodesState,
-  type Connection,
-  type Node as RFNode,
-  type NodeProps,
-  type NodeTypes,
+  ReactFlow, Background, Controls, MiniMap, addEdge, useEdgesState, useNodesState,
+  type Connection, type Node as RFNode, type NodeProps, type NodeTypes,
 } from '@xyflow/react';
-
 import '@xyflow/react/dist/style.css';
-
 import {
-  Play,
-  Save,
-  Download,
-  Upload,
-  Sparkles,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
+  ArrowLeft, Check, CheckCircle2, ChevronDown, Download, FileJson, History, Loader2, Menu,
+  Play, Plus, Save, Search, Sparkles, Upload, X, Zap,
 } from 'lucide-react';
-
 import { Sidebar } from './Sidebar';
 import { NodeCard } from './NodeCard';
 import { Inspector } from './Inspector';
 import { ThemeToggle } from './ThemeToggle';
-
 import { templates } from '@/lib/templates';
 import { loadWorkflows, saveWorkflows } from '@/lib/storage';
 import { validateWorkflow } from '@/lib/validate';
 import { NODE_META } from '@/lib/nodes';
+import type { NodeKind, Workflow, WorkflowNode } from '@/types/workflow';
 
-import type {
-  NodeKind,
-  Workflow,
-  WorkflowNode,
-} from '@/types/workflow';
+const CustomNode = ({ id, data, selected }: NodeProps) => <NodeCard node={{ id, type: data.kind || 'transform', position: { x: 0, y: 0 }, data } as WorkflowNode} selected={selected} />;
+const rfTypes: NodeTypes = { custom: CustomNode };
 
-/*
- * React Flow expects custom node components to receive
- * React Flow's NodeProps directly.
- *
- * Your existing NodeCard expects:
- * {
- *   node: WorkflowNode;
- *   selected?: boolean;
- * }
- *
- * This adapter converts React Flow's props into that shape.
- */
-const CustomNode = ({ id, data, selected }: NodeProps) => {
-  const node = {
-    id,
-    type: data.kind || 'transform',
-    position: { x: 0, y: 0 },
-    data,
-  } as WorkflowNode;
-
-  return <NodeCard node={node} selected={selected} />;
-};
-
-const rfTypes: NodeTypes = {
-  custom: CustomNode,
-};
-
-function makeNode(
-  type: NodeKind,
-  x = 180,
-  y = 180
-): RFNode {
-  const id = crypto.randomUUID();
-
-  return {
-    id,
-    type: 'custom',
-    position: { x, y },
-    data: {
-      label: NODE_META[type].title,
-      description: NODE_META[type].description,
-      config: {},
-      kind: type,
-    },
-  } as RFNode;
+function makeNode(type: NodeKind, x = 180, y = 180): RFNode {
+  return { id: crypto.randomUUID(), type: 'custom', position: { x, y }, data: { label: NODE_META[type].title, description: NODE_META[type].description, config: type === 'ai' ? { provider: 'huggingface', model: 'google/gemma-4-26B-A4B-it', task: 'summarize', temperature: 0.4 } : {}, kind: type } } as RFNode;
 }
+function initial(): Workflow { return templates[0]; }
+function toRFNodes(w: Workflow) { return w.nodes.map(n => ({ ...n, type: 'custom', data: { ...n.data, kind: n.type } })); }
+function toWorkflow(workflow: Workflow, nodes: any[], edges: any[]): Workflow { return { ...workflow, nodes: nodes.map(n => ({ id: n.id, type: (n.data?.kind || 'transform') as NodeKind, position: n.position, data: n.data })), edges, updatedAt: new Date().toISOString() }; }
 
-function initial(): Workflow {
-  return templates[0];
-}
-
-export function BlackstarStudio() {
+export function BlackstarStudio({ onBack }: { onBack?: () => void }) {
   const [workflow, setWorkflow] = useState<Workflow>(initial);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<any>(
-    workflow.nodes.map((n) => ({
-      ...n,
-      type: 'custom',
-      data: {
-        ...n.data,
-        kind: n.type,
-      },
-    }))
-  );
-
-  const [edges, setEdges, onEdgesChange] = useEdgesState<any>(
-    workflow.edges
-  );
-
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>(toRFNodes(initial()));
+  const [edges, setEdges, onEdgesChange] = useEdgesState<any>(initial().edges);
   const [selected, setSelected] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -121,602 +41,113 @@ export function BlackstarStudio() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [showAI, setShowAI] = useState(false);
   const [saved, setSaved] = useState(true);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [mobileInspector, setMobileInspector] = useState(false);
+  const [showExecution, setShowExecution] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const all = loadWorkflows();
-
     if (all[0]) {
-      setWorkflow(all[0]);
-
-      setNodes(
-        all[0].nodes.map((n) => ({
-          ...n,
-          type: 'custom',
-          data: {
-            ...n.data,
-            kind: n.type,
-          },
-        }))
-      );
-
-      setEdges(all[0].edges);
+      setWorkflow(all[0]); setNodes(toRFNodes(all[0])); setEdges(all[0].edges);
     }
   }, [setNodes, setEdges]);
 
-  const sync = (ns: any[], es: any[]) => {
-    const w: Workflow = {
-      ...workflow,
-      nodes: ns.map((n: any) => ({
-        id: n.id,
-        type:
-          n.data?.kind ||
-          (n.type === 'custom' ? 'transform' : n.type),
-        position: n.position,
-        data: n.data,
-      })),
-      edges: es,
-      updatedAt: new Date().toISOString(),
-    };
-
-    setWorkflow(w);
-    setSaved(false);
-  };
-
-  const add = (kind: NodeKind) => {
-    const n = makeNode(
-      kind,
-      220 + nodes.length * 30,
-      220 + nodes.length * 20
-    );
-
-    n.data = {
-      ...n.data,
-      kind,
-    };
-
-    const ns = [...nodes, n];
-
-    setNodes(ns);
-    sync(ns, edges);
-  };
-
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      const es = addEdge(connection, edges);
-
-      setEdges(es);
-      sync(nodes, es);
-    },
-    [nodes, edges]
-  );
-
-  const select = (node: any) => {
-    setSelected(node.id);
-  };
+  const sync = useCallback((ns: any[], es: any[]) => { setWorkflow(current => toWorkflow(current, ns, es)); setSaved(false); }, []);
+  const add = useCallback((kind: NodeKind) => { const n = makeNode(kind, 260 + nodes.length * 28, 150 + nodes.length * 22); const ns = [...nodes, n]; setNodes(ns); sync(ns, edges); }, [nodes, edges, setNodes, sync]);
+  const onConnect = useCallback((connection: Connection) => { const es = addEdge({ ...connection, animated: true, style: { stroke: 'var(--accent)', strokeWidth: 1.5 } }, edges); setEdges(es); sync(nodes, es); }, [nodes, edges, setEdges, sync]);
+  const select = (node: any) => { setSelected(node.id); setMobileInspector(true); };
 
   const updateNode = (node: WorkflowNode) => {
-    const ns = nodes.map((x: any) =>
-      x.id === node.id
-        ? {
-            ...x,
-            type: 'custom',
-            data: {
-              ...node.data,
-              kind: node.type,
-            },
-          }
-        : x
-    );
-
-    setNodes(ns);
-    sync(ns, edges);
+    const ns = nodes.map((x: any) => x.id === node.id ? { ...x, type: 'custom', data: { ...node.data, kind: node.type } } : x);
+    setNodes(ns); sync(ns, edges);
   };
-
   const del = () => {
     if (!selected) return;
-
-    const ns = nodes.filter(
-      (n: any) => n.id !== selected
-    );
-
-    const es = edges.filter(
-      (e: any) =>
-        e.source !== selected &&
-        e.target !== selected
-    );
-
-    setNodes(ns);
-    setEdges(es);
-    setSelected(null);
-
-    sync(ns, es);
+    const ns = nodes.filter((n: any) => n.id !== selected); const es = edges.filter((e: any) => e.source !== selected && e.target !== selected);
+    setNodes(ns); setEdges(es); setSelected(null); setMobileInspector(false); sync(ns, es);
   };
-
-  const save = () => {
-    const w: Workflow = {
-      ...workflow,
-      nodes: nodes.map((n: any) => ({
-        id: n.id,
-        type: (n.data?.kind || 'transform') as NodeKind,
-        position: n.position,
-        data: n.data,
-      })),
-      edges,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const all = loadWorkflows().filter(
-      (x) => x.id !== w.id
-    );
-
-    saveWorkflows([w, ...all]);
-
-    setWorkflow(w);
-    setSaved(true);
-  };
-
+  const save = () => { const w = toWorkflow(workflow, nodes, edges); saveWorkflows([w, ...loadWorkflows().filter(x => x.id !== w.id)]); setWorkflow(w); setSaved(true); };
   const run = async () => {
-    setRunning(true);
-    setResult(null);
-
-    const w: Workflow = {
-      ...workflow,
-      nodes: nodes.map((n: any) => ({
-        id: n.id,
-        type: (n.data?.kind || 'transform') as NodeKind,
-        position: n.position,
-        data: n.data,
-      })),
-      edges,
-    };
-
+    setRunning(true); setResult(null); setShowExecution(true);
     try {
-      const response = await fetch('/api/execute', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          workflow: w,
-          input: {
-            message: 'Hello from Blackstar',
-            items: [1, 2, 2, 3, 5],
-            urgent: false,
-          },
-        }),
-      });
-
+      const response = await fetch('/api/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workflow: toWorkflow(workflow, nodes, edges), input: { message: 'Hello from Blackstar', items: [1, 2, 2, 3, 5], urgent: false } }) });
       setResult(await response.json());
-    } catch (error: any) {
-      setResult({
-        ok: false,
-        error: error.message,
-      });
-    } finally {
-      setRunning(false);
-    }
+    } catch (error: any) { setResult({ ok: false, error: error.message }); }
+    finally { setRunning(false); }
   };
-
-  const exportW = () => {
-    const blob = new Blob(
-      [
-        JSON.stringify(
-          {
-            ...workflow,
-            nodes: nodes.map((n: any) => ({
-              ...n,
-              type: n.data?.kind || 'transform',
-            })),
-            edges,
-          },
-          null,
-          2
-        ),
-      ],
-      {
-        type: 'application/json',
-      }
-    );
-
-    const a = document.createElement('a');
-
-    a.href = URL.createObjectURL(blob);
-
-    a.download = `${workflow.name
-      .toLowerCase()
-      .replace(/\s+/g, '-')}.json`;
-
-    a.click();
-
-    URL.revokeObjectURL(a.href);
-  };
-
-  const importW = () => {
-    const input = document.createElement('input');
-
-    input.type = 'file';
-    input.accept = '.json';
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-
-      if (!file) return;
-
-      const w = JSON.parse(await file.text());
-
-      setWorkflow(w);
-
-      setNodes(
-        w.nodes.map((n: any) => ({
-          ...n,
-          type: 'custom',
-          data: {
-            ...n.data,
-            kind: n.type,
-          },
-        }))
-      );
-
-      setEdges(w.edges || []);
-      setSaved(false);
-    };
-
-    input.click();
-  };
-
+  const exportW = () => { const blob = new Blob([JSON.stringify(toWorkflow(workflow, nodes, edges), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${workflow.name.toLowerCase().replace(/\s+/g, '-')}.json`; a.click(); URL.revokeObjectURL(url); };
+  const importW = () => { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json'; input.onchange = async () => { const file = input.files?.[0]; if (!file) return; try { const w = JSON.parse(await file.text()) as Workflow; setWorkflow(w); setNodes(toRFNodes(w)); setEdges(w.edges || []); setSaved(false); } catch { alert('That workflow file could not be read.'); } }; input.click(); };
   const generate = async () => {
     if (!aiPrompt.trim()) return;
-
-    const prompt = aiPrompt.toLowerCase();
-
-    const w = prompt.includes('api')
-      ? templates[0]
-      : templates[1];
-
-    setWorkflow({
-      ...w,
-      id: crypto.randomUUID(),
-      name: 'AI Generated Flow',
-    });
-
-    setNodes(
-      w.nodes.map((n) => ({
-        ...n,
-        type: 'custom',
-        data: {
-          ...n.data,
-          kind: n.type,
-        },
-      }))
-    );
-
-    setEdges(w.edges);
-    setShowAI(false);
-    setAiPrompt('');
-    setSaved(false);
+    try {
+      const response = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'workflow design', input: aiPrompt, model: 'google/gemma-4-26B-A4B-it', provider: 'huggingface' }) });
+      const ai = await response.json();
+      const base = ai?.result ? templates[0] : (aiPrompt.toLowerCase().includes('api') ? templates[0] : templates[1]);
+      const w = { ...base, id: crypto.randomUUID(), name: 'AI Generated Flow', description: ai?.result ? String(ai.result).slice(0, 180) : base.description };
+      setWorkflow(w); setNodes(toRFNodes(w)); setEdges(w.edges); setShowAI(false); setAiPrompt(''); setSaved(false);
+    } catch { setShowAI(false); }
   };
+  const applyTemplate = (t: Workflow) => { const w = { ...t, id: crypto.randomUUID() }; setWorkflow(w); setNodes(toRFNodes(w)); setEdges(w.edges); setShowTemplates(false); setSaved(false); setSelected(null); };
+  const newWorkflow = () => { const w = { ...initial(), id: crypto.randomUUID(), name: 'Untitled workflow', nodes: [] }; setWorkflow(w); setNodes([]); setEdges([]); setSelected(null); setSaved(false); };
 
-  const sel = nodes.find(
-    (n: any) => n.id === selected
-  );
+  const sel = nodes.find((n: any) => n.id === selected);
+  const validation = useMemo(() => validateWorkflow(toWorkflow(workflow, nodes, edges)), [workflow, nodes, edges]);
 
-  const validation = useMemo(
-    () =>
-      validateWorkflow({
-        ...workflow,
-        nodes: nodes.map((n: any) => ({
-          id: n.id,
-          type: (n.data?.kind || 'transform') as NodeKind,
-          position: n.position,
-          data: n.data,
-        })),
-        edges,
-      }),
-    [workflow, nodes, edges]
-  );
+  const onDrop = (event: React.DragEvent) => { event.preventDefault(); const kind = event.dataTransfer.getData('blackstar/node') as NodeKind; if (!kind) return; const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect(); const position = { x: event.clientX - bounds.left - 100, y: event.clientY - bounds.top - 40 }; const n = makeNode(kind, position.x, position.y); const ns = [...nodes, n]; setNodes(ns); sync(ns, edges); };
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-[var(--bg)]">
-      <Sidebar
-        onAdd={add}
-        onTemplates={() => setShowTemplates(true)}
-        onNew={() => {
-          const w = {
-            ...initial(),
-            id: crypto.randomUUID(),
-            name: 'Untitled workflow',
-          };
+    <div className="studio-shell">
+      <div className="studio-ambient ambient-a" /><div className="studio-ambient ambient-b" />
+      <div className="desktop-sidebar-wrap"><Sidebar onAdd={add} onTemplates={() => setShowTemplates(true)} onNew={newWorkflow} /></div>
+      {mobileMenu && <Sidebar mobile onAdd={add} onTemplates={() => setShowTemplates(true)} onNew={newWorkflow} onClose={() => setMobileMenu(false)} />}
 
-          setWorkflow(w);
-          setNodes([]);
-          setEdges([]);
-          setSelected(null);
-          setSaved(false);
-        }}
-      />
-
-      <main className="flex-1 min-w-0 flex flex-col">
-        <header className="h-14 shrink-0 border-b border-[var(--border)] flex items-center px-4 gap-3 bg-[var(--panel)]">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-[var(--accent)] text-[var(--bg)] grid place-items-center font-bold text-xs">
-              B
-            </div>
-
-            <div>
-              <div className="text-xs font-semibold">
-                Blackstar AI
-              </div>
-
-              <div className="text-[9px] text-[var(--muted)]">
-                Workflow studio
-              </div>
-            </div>
+      <main className="studio-main">
+        <header className="studio-topbar">
+          <div className="topbar-left">
+            <button className="mobile-only icon-button" onClick={() => setMobileMenu(true)}><Menu size={18} /></button>
+            {onBack && <button className="top-back" onClick={onBack}><ArrowLeft size={14} /><span>Blackstar</span></button>}
+            <div className="workflow-title"><span className="status-dot" /><input value={workflow.name} onChange={e => { setWorkflow({ ...workflow, name: e.target.value }); setSaved(false); }} /><ChevronDown size={13} /></div>
           </div>
-
-          <div className="h-5 w-px bg-[var(--border)] mx-2" />
-
-          <input
-            value={workflow.name}
-            onChange={(e) => {
-              setWorkflow({
-                ...workflow,
-                name: e.target.value,
-              });
-
-              setSaved(false);
-            }}
-            className="bg-transparent outline-none text-xs font-medium w-48"
-          />
-
-          <div className="ml-auto flex items-center gap-1.5">
-            <span
-              className={`text-[10px] flex items-center gap-1 mr-2 ${
-                validation.valid
-                  ? 'text-emerald-500'
-                  : 'text-red-500'
-              }`}
-            >
-              {validation.valid ? (
-                <CheckCircle2 size={12} />
-              ) : (
-                <AlertCircle size={12} />
-              )}
-
-              {saved ? 'Saved' : 'Unsaved'}
-            </span>
-
-            <button
-              onClick={() => setShowAI(true)}
-              className="px-2.5 h-9 rounded-lg border border-[var(--border)] text-xs flex gap-1.5 items-center hover:bg-[var(--panel2)]"
-            >
-              <Sparkles size={14} />
-              Copilot
-            </button>
-
-            <button
-              onClick={run}
-              disabled={running}
-              className="px-3 h-9 rounded-lg bg-[var(--accent)] text-[var(--bg)] text-xs font-semibold flex gap-1.5 items-center"
-            >
-              {running ? (
-                <Loader2
-                  className="animate-spin"
-                  size={14}
-                />
-              ) : (
-                <Play size={14} />
-              )}
-
-              Run
-            </button>
-
-            <button
-              onClick={save}
-              className="h-9 w-9 rounded-lg border border-[var(--border)] grid place-items-center"
-              aria-label="Save workflow"
-            >
-              <Save size={15} />
-            </button>
-
-            <button
-              onClick={exportW}
-              className="h-9 w-9 rounded-lg border border-[var(--border)] grid place-items-center"
-              aria-label="Export workflow"
-            >
-              <Download size={15} />
-            </button>
-
-            <button
-              onClick={importW}
-              className="h-9 w-9 rounded-lg border border-[var(--border)] grid place-items-center"
-              aria-label="Import workflow"
-            >
-              <Upload size={15} />
-            </button>
-
+          <div className="topbar-center"><div className="studio-pill"><span className="live-dot" /> {running ? 'Executing workflow' : 'Studio ready'}</div></div>
+          <div className="topbar-actions">
+            <button className="top-icon mobile-hide" onClick={importW} title="Import"><Upload size={15} /></button>
+            <button className="top-icon mobile-hide" onClick={exportW} title="Export"><Download size={15} /></button>
+            <button className="top-icon mobile-hide" onClick={save} title="Save"><Save size={15} /></button>
             <ThemeToggle />
+            <button className="copilot-button" onClick={() => setShowAI(true)}><Sparkles size={14} /> <span>Copilot</span></button>
+            <button className="run-button" onClick={run} disabled={running}>{running ? <Loader2 size={14} className="spin" /> : <Play size={14} fill="currentColor" />}<span>{running ? 'Running' : 'Run'}</span></button>
           </div>
         </header>
 
-        <div className="flex-1 min-h-0 relative">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={(changes) => {
-              onNodesChange(changes);
-              setSaved(false);
-            }}
-            onEdgesChange={(changes) => {
-              onEdgesChange(changes);
-              setSaved(false);
-            }}
-            onConnect={onConnect}
-            onNodeClick={(_, node) => select(node)}
-            nodeTypes={rfTypes}
-            fitView
-            className="canvas-grid"
-          >
-            <Background gap={20} size={1} />
-
-            <Controls />
-
-            <MiniMap
-              nodeColor="var(--muted)"
-              maskColor="rgba(128,128,128,.1)"
-            />
+        <div className="workspace" onDrop={onDrop} onDragOver={e => e.preventDefault()}>
+          <ReactFlow nodes={nodes} edges={edges} onNodesChange={changes => { onNodesChange(changes); setSaved(false); }} onEdgesChange={changes => { onEdgesChange(changes); setSaved(false); }} onConnect={onConnect} onNodeClick={(_, node) => select(node)} nodeTypes={rfTypes} fitView className="blackstar-flow">
+            <Background gap={24} size={1} color="var(--grid-dot)" />
+            <Controls showInteractive={false} />
+            <MiniMap nodeColor="var(--accent)" maskColor="rgba(0,0,0,.18)" />
           </ReactFlow>
 
-          {result && (
-            <div className="absolute left-4 bottom-4 w-[430px] max-h-[280px] overflow-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl">
-              <div className="p-3 border-b border-[var(--border)] flex items-center">
-                <span className="text-xs font-semibold">
-                  Execution result
-                </span>
+          {nodes.length === 0 && <div className="empty-workspace"><div className="empty-orb"><Sparkles size={22} /></div><span className="section-kicker">Blank canvas</span><h2>Build your next workflow.</h2><p>Drag a block from the sidebar, or let Copilot draft a starting point.</p><div><button className="empty-primary" onClick={() => setShowAI(true)}><Sparkles size={14} /> Generate with AI</button><button className="empty-secondary" onClick={() => add('trigger')}><Plus size={14} /> Add trigger</button></div></div>}
 
-                <button
-                  onClick={() => setResult(null)}
-                  className="ml-auto text-[var(--muted)]"
-                >
-                  ×
-                </button>
-              </div>
+          {!validation.valid && <div className="validation-chip"><span>!</span>{validation.errors[0]}</div>}
+          {saved && <div className="canvas-save"><Check size={12} /> Saved</div>}
 
-              <pre className="p-3 text-[10px] mono whitespace-pre-wrap">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {!validation.valid && (
-            <div className="absolute left-4 top-4 rounded-lg border border-red-500/20 bg-[var(--panel)] px-3 py-2 text-[10px] text-red-500">
-              {validation.errors.join(' ')}
-            </div>
-          )}
+          {showExecution && result && <div className="execution-float"><div className="execution-head"><div><span className="section-kicker">Last execution</span><b>{result.ok ? 'Workflow completed' : 'Workflow failed'}</b></div><button className="icon-button" onClick={() => setShowExecution(false)}><X size={15} /></button></div><div className="execution-summary"><span className={result.ok ? 'success-badge' : 'error-badge'}>{result.ok ? 'SUCCESS' : 'ERROR'}</span><span>{result.logs?.length || 0} steps</span><span>{result.finishedAt && result.startedAt ? `${Math.max(1, new Date(result.finishedAt).getTime() - new Date(result.startedAt).getTime())}ms` : '—'}</span></div><pre>{JSON.stringify(result.output ?? result.error, null, 2)}</pre></div>}
         </div>
+
+        <footer className="studio-statusbar"><div><span className="live-dot" /> Local workspace</div><div className="status-center"><span>{nodes.length} nodes</span><span>{edges.length} connections</span><span>{validation.valid ? 'Workflow valid' : `${validation.errors.length} issue${validation.errors.length > 1 ? 's' : ''}`}</span></div><div><button onClick={() => setShowExecution(true)}><History size={12} /> Executions</button><span className="mono">⌘ K</span></div></footer>
       </main>
 
-      {sel && (
-        <Inspector
-          node={
-            {
-              ...sel,
-              type: (sel.data?.kind ||
-                'transform') as any,
-              data: sel.data,
-            } as any
-          }
-          onChange={updateNode}
-          onDelete={del}
-          onClose={() => setSelected(null)}
-        />
-      )}
+      {sel && <Inspector node={{ ...sel, type: (sel.data?.kind || 'transform') as any, data: sel.data } as any} onChange={updateNode} onDelete={del} onClose={() => { setSelected(null); setMobileInspector(false); }} />}
+      {sel && mobileInspector && <div className="mobile-inspector-overlay"><Inspector mobile node={{ ...sel, type: (sel.data?.kind || 'transform') as any, data: sel.data } as any} onChange={updateNode} onDelete={del} onClose={() => { setSelected(null); setMobileInspector(false); }} /></div>}
 
-      {showTemplates && (
-        <Modal
-          title="Templates"
-          onClose={() => setShowTemplates(false)}
-        >
-          <div className="grid gap-3">
-            {templates.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => {
-                  setWorkflow({
-                    ...t,
-                    id: crypto.randomUUID(),
-                  });
+      <div className="mobile-bottom-bar"><button onClick={() => setMobileMenu(true)}><Menu size={17} /><span>Menu</span></button><button onClick={() => add('ai')}><Plus size={17} /><span>Add</span></button><button onClick={() => { if (sel) setMobileInspector(true); else setShowAI(true); }}><Sparkles size={17} /><span>{sel ? 'Inspect' : 'AI'}</span></button><button onClick={run} disabled={running}><Play size={17} fill="currentColor" /><span>Run</span></button></div>
 
-                  setNodes(
-                    t.nodes.map((n) => ({
-                      ...n,
-                      type: 'custom',
-                      data: {
-                        ...n.data,
-                        kind: n.type,
-                      },
-                    }))
-                  );
-
-                  setEdges(t.edges);
-                  setShowTemplates(false);
-                  setSaved(false);
-                  setSelected(null);
-                }}
-                className="text-left p-4 rounded-xl border border-[var(--border)] hover:bg-[var(--panel2)]"
-              >
-                <div className="text-xs font-semibold">
-                  {t.name}
-                </div>
-
-                <div className="text-[10px] text-[var(--muted)] mt-1">
-                  {t.description}
-                </div>
-              </button>
-            ))}
-          </div>
-        </Modal>
-      )}
-
-      {showAI && (
-        <Modal
-          title="Blackstar Copilot"
-          onClose={() => setShowAI(false)}
-        >
-          <p className="text-xs text-[var(--muted)] mb-3">
-            Describe an automation. Blackstar will turn it
-            into a ready-to-run workflow template.
-          </p>
-
-          <textarea
-            autoFocus
-            value={aiPrompt}
-            onChange={(e) =>
-              setAiPrompt(e.target.value)
-            }
-            placeholder="e.g. Fetch an API, clean the data with Python, then classify it with AI"
-            className="w-full h-28 resize-none rounded-lg border border-[var(--border)] bg-[var(--panel2)] p-3 text-xs outline-none"
-          />
-
-          <button
-            onClick={generate}
-            className="mt-3 w-full py-2.5 rounded-lg bg-[var(--accent)] text-[var(--bg)] text-xs font-semibold"
-          >
-            Generate workflow
-          </button>
-        </Modal>
-      )}
+      {showTemplates && <Modal title="Workflow templates" onClose={() => setShowTemplates(false)}><div className="template-grid">{templates.map(t => <button key={t.id} onClick={() => applyTemplate(t)} className="template-card"><span className="template-icon"><FileJson size={15} /></span><div><b>{t.name}</b><small>{t.description}</small></div><ArrowIcon /></button>)}</div></Modal>}
+      {showAI && <Modal title="Blackstar Copilot" onClose={() => setShowAI(false)}><div className="copilot-modal"><div className="copilot-hero"><span><Sparkles size={16} /></span><div><b>Describe the outcome.</b><small>Copilot will prepare a workflow starting point.</small></div></div><textarea autoFocus value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="e.g. Analyze customer feedback, classify urgency, then send urgent cases to an API." /><div className="copilot-model"><span><span className="live-dot" /> Gemma 4</span><small>Hugging Face · configured by environment</small></div><button className="modal-primary" onClick={generate}><Sparkles size={14} /> Generate workflow</button></div></Modal>}
     </div>
   );
 }
 
-function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm grid place-items-center p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
-        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center">
-          <span className="font-semibold text-sm">
-            {title}
-          </span>
-
-          <button
-            onClick={onClose}
-            className="ml-auto text-lg"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
-  );
-}
+function ArrowIcon() { return <span className="template-arrow">→</span>; }
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) { return <div className="modal-backdrop"><div className="modal-shell"><div className="modal-head"><div><span className="section-kicker">Blackstar</span><b>{title}</b></div><button className="icon-button" onClick={onClose}><X size={17} /></button></div><div className="modal-body">{children}</div></div></div>; }
