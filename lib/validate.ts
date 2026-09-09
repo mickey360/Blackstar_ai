@@ -1,2 +1,0 @@
-import type { Workflow } from '@/types/workflow';
-export function validateWorkflow(w:Workflow){const errors:string[]=[];if(!w.name.trim())errors.push('Workflow needs a name.');if(!w.nodes.length)errors.push('Add at least one node.');const ids=new Set<string>();for(const n of w.nodes){if(ids.has(n.id))errors.push(`Duplicate node id: ${n.id}`);ids.add(n.id)}for(const e of w.edges){if(!ids.has(e.source)||!ids.has(e.target))errors.push(`Broken connection: ${e.id}`)}return {valid:!errors.length,errors};}
