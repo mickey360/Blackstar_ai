@@ -1,0 +1,1 @@
+import type {Workflow} from '@/types/workflow';export function serializeWorkflow(w:Workflow){return JSON.stringify(w,null,2)}export function parseWorkflow(raw:string):Workflow{const w=JSON.parse(raw);if(!w.nodes||!Array.isArray(w.nodes))throw new Error('Invalid Blackstar workflow');return w}
