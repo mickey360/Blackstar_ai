@@ -1,3 +1,0 @@
-'use client';
-import {Moon,Sun} from 'lucide-react';import {useEffect,useState} from 'react';
-export function ThemeToggle(){const [dark,setDark]=useState(false);useEffect(()=>{const d=localStorage.getItem('blackstar-theme')==='dark';setDark(d);document.documentElement.classList.toggle('dark',d)},[]);return <button aria-label="Toggle theme" onClick={()=>{const n=!dark;setDark(n);localStorage.setItem('blackstar-theme',n?'dark':'light');document.documentElement.classList.toggle('dark',n)}} className="h-9 w-9 rounded-lg border border-[var(--border)] bg-[var(--panel)] grid place-items-center hover:bg-[var(--panel2)]">{dark?<Sun size={16}/>:<Moon size={16}/>}</button>}
