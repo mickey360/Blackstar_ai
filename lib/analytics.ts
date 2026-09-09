@@ -1,1 +1,0 @@
-export function executionMetrics(logs:{durationMs?:number;level:string}[]){const durations=logs.map(x=>x.durationMs||0);return{steps:logs.length,failures:logs.filter(x=>x.level==='error').length,totalMs:durations.reduce((a,b)=>a+b,0),avgMs:durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0}}
